@@ -117,55 +117,59 @@ private:
     // Registers
     struct Registers
     {
-        union
+        struct
         {
-            struct
+            union
             {
-                uint8_t B;
-                uint8_t C;
-            };
-            uint16_t BC;
-        };
-
-        union
-        {
-            struct
-            {
-                uint8_t D;
-                uint8_t E;
-            };
-            uint16_t DE;
-        };
-
-        union
-        {
-            struct
-            {
-                uint8_t H;
-                uint8_t L;
-            };
-            uint16_t HL;
-        };
-
-        union
-        {
-            struct
-            {
-                uint8_t A;
                 struct
                 {
-                   uint8_t C:1;  // Carry
-                   uint8_t N:1;  // Subtract
-                   uint8_t PV:1; // Parity/Overflow
-                   uint8_t H:1;  // Half Carry
-                   uint8_t Z:1;  // Zero
-                   uint8_t S:1;  // Sign
-                } F;
+                    uint8_t B;
+                    uint8_t C;
+                };
+                uint16_t BC;
             };
-            uint16_t AF;
-        };
+
+            union
+            {
+                struct
+                {
+                    uint8_t D;
+                    uint8_t E;
+                };
+                uint16_t DE;
+            };
+
+            union
+            {
+                struct
+                {
+                    uint8_t H;
+                    uint8_t L;
+                };
+                uint16_t HL;
+            };
+
+            union
+            {
+                struct
+                {
+                    uint8_t A;
+                    struct
+                    {
+                        uint8_t C:1;  // Carry
+                        uint8_t N:1;  // Subtract
+                        uint8_t PV:1; // Parity/Overflow
+                        uint8_t H:1;  // Half Carry
+                        uint8_t Z:1;  // Zero
+                        uint8_t S:1;  // Sign
+                    } F;
+                };
+                uint16_t AF;
+            } ;
+        } general, shadow;
 
         uint16_t SP;
+        uint16_t PC;
     } reg;
 
     // Register lookup tables
