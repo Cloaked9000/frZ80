@@ -217,29 +217,82 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                 uint8_t result = reg.general.A + *reg_table_r[z];
 
                                 reg.general.F.S = result >> 7; // If result is negative, set S
-                                reg.general.F.PV = ((reg.general.A >> 7) == 0 && (*reg_table_r[z] >> 7) == 0 && reg.general.F.S) || ((reg.general.A >> 7) && (*reg_table_r[z] >> 7) && !reg.general.F.S); // If overflow
-                                reg.general.F.H = (((reg.general.A & 0xF) + *reg_table_r[z]) & 0x10) == 0x10; // If half carry
                                 reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*reg_table_r[z] >> 7) && (*reg_table_r[z] >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.H = (((reg.general.A & 0xF) + *reg_table_r[z]) & 0x10) == 0x10; // If carry from bit 3
+                                reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)*reg_table_r[z])) > 0xFF; // If carry from bit 7
                                 reg.general.F.N = 0;
 
                                 reg.general.A = result;
-
                                 log_stream << "ADD A, " << reg_table_r_names[z] << std::endl;
                                 break;
                             }
                             case 1: // ADC A, r[z]
                                 break;
-                            case 2: // SUB A, r[z]
+                            case 2: // SUB r[z]
+
+                            {
+                                uint8_t result = reg.general.A - *reg_table_r[z];
+
+                                reg.general.F.S = result >> 7; // If result is negative
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.H = ((reg.general.A & 0xF) < (*reg_table_r[z] & 0xF)); // If borrow from bit 4
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*reg_table_r[z] >> 7) && (*reg_table_r[z] >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.N = 1;
+                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*reg_table_r[z]) > 0xFF; // If borrow
+
+                                reg.general.A = result;
+                                log_stream << "SUB " << reg_table_r_names[z] << std::endl;
                                 break;
+                            }
                             case 3: // SBC A, r[z]
                                 break;
-                            case 4: // AND A, r[z]
+                            case 4: // AND r[z]
+                            {
+                                uint8_t result = reg.general.A & *reg_table_r[z];
+
+                                reg.general.F.S = result >> 7; // If result is negative, set S
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.H = 1;
+                                reg.general.F.PV = parity(result); // If parity
+                                reg.general.F.N = 0;
+                                reg.general.F.C = 0;
+
+                                reg.general.A = result;
+                                log_stream << "AND " << reg_table_r_names[z] << std::endl;
                                 break;
-                            case 5: // XOR A, r[z]
+                            }
+                            case 5: // XOR r[z]
+                            {
+                                uint8_t result = reg.general.A ^ *reg_table_r[z];
+
+                                reg.general.F.S = result >> 7; // If result is negative, set S
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.H = 0;
+                                reg.general.F.PV = parity(result); // If parity
+                                reg.general.F.N = 0;
+                                reg.general.F.C = 0;
+
+                                reg.general.A = result;
+                                log_stream << "XOR " << reg_table_r_names[z] << std::endl;
                                 break;
-                            case 6: // OR A, r[z]
+                            }
+                            case 6: // OR r[z]
+                            {
+                                uint8_t result = reg.general.A | *reg_table_r[z];
+
+                                reg.general.F.S = result >> 7; // If result is negative, set S
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.H = 0;
+                                reg.general.F.PV = parity(result); // If parity
+                                reg.general.F.N = 0;
+                                reg.general.F.C = 0;
+
+                                reg.general.A = result;
+                                log_stream << "OR " << reg_table_r_names[z] << std::endl;
                                 break;
-                            case 7: // CP A, r[z]
+                            }
+                            case 7: // CP r[z]
                                 break;
                             default:
                                 abort();

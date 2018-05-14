@@ -61,6 +61,26 @@ public:
 private:
 
     /*!
+     * Checks the parity of two numbers
+     *
+     * @tparam T The type of thing to calculate the parity of
+     * @param num The thing to calculate the parity of
+     * @return True if the parity is even, false otherwise
+     */
+    template<typename T>
+    inline bool parity(T num)
+    {
+        static_assert(((sizeof(T) * 8) % 2) == 0, "Can't check parity of an object which is not even in size");
+        size_t a = sizeof(T) * 8;
+        do
+        {
+            a /= 2;
+            num ^= num >> 16;
+        } while(a != 1);
+        return (~num) & 1;
+    }
+
+    /*!
      * Converts a value into its associated prefix
      *
      * @param val The value to convert
