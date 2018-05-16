@@ -1,0 +1,1 @@
+z80asm -i in.asm -o out.bin
