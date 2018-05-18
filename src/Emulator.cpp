@@ -53,6 +53,7 @@ void Emulator::reset()
     reg_table_r_names = {"B", "C", "D", "E", "H", "L", "(HL)", "A"};
     reg_table_rp_names = {"BC", "DE", "HL", "SP"};
     reg_table_rp2_names = {"BC", "DE", "HL", "AF"};
+    cc_table_names = {"NZ", "Z", "NC", "C", "PO", "PE", "P", "M"};
 }
 
 void Emulator::push(uint16_t val)
@@ -77,6 +78,7 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
     for(reg.PC = 0; reg.PC < data.size(); ++reg.PC)
     {
         //Get instruction prefix
+        process_instruction:
         Prefix prefix = to_prefix(memory[reg.PC]);
         if(prefix != Prefix::None)
             ++reg.PC;
@@ -86,7 +88,7 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
         y = (memory[reg.PC] >> 3) & 0x7;
         z = memory[reg.PC] & 0x7;
         p = (y >> 1) & 0x3;
-        q = (y >> 2) & 0x2;
+        q = y & 0x1;
 
         switch(prefix)
         {
@@ -94,11 +96,12 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
             {
                 switch(x)
                 {
-                    case 0: // X =
+                    case 0: // X = 0
                     {
                         switch(z)
                         {
                             case 0: // z = 0
+                            {
                                 switch(y)
                                 {
                                     case 0: // NOP
@@ -113,24 +116,32 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                     }
                                     case 2:
                                         break;
-                                    case 3:
+                                    case 3: // JR d
+                                    {
+                                        int8_t jmp_offset = data[++reg.PC] + 2;
+                                        reg.PC += jmp_offset - 1;
+
+                                        log_stream << "JR " << (int16_t)jmp_offset << std::endl;
+                                        goto process_instruction;
                                         break;
+                                    }
                                     case 4: case 5: case 6: case 7:
                                         break;
                                     default:
                                         abort();
                                 }
                                 break;
+                            }
                             case 1: // z = 1
                             {
                                 switch(q)
                                 {
                                     case 0: // LD rp[p], nn
                                     {
-                                        *reg_table_rp[p] = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                        *get_rp_reg(p) = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
                                         reg.PC += 2;
 
-                                        log_stream << "LD " << reg_table_rp_names[p].c_str() << ", " << *reg_table_rp[p] << std::endl;
+                                        log_stream << "LD " << reg_table_rp_names[p].c_str() << ", " << *get_rp_reg(p) << std::endl;
                                         break;
                                     }
                                     case 1:
@@ -140,15 +151,107 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                 }
                                 break;
                             }
-                            case 2:
+                            case 2: // z = 2
+                            {
+                                switch(q)
+                                {
+                                    case 0: // q = 0
+                                    {
+                                        switch(p)
+                                        {
+                                            case 0: // LD (BC), A
+                                            {
+                                                memory[reg.general.BC] = reg.general.A;
+                                                log_stream << "LD (BC), A" << std::endl;
+                                                break;
+                                            }
+                                            case 1: // LD (DE), A
+                                            {
+                                                memory[reg.general.DE] = reg.general.A;
+                                                log_stream << "LD (DE), A" << std::endl;
+                                                break;
+                                            }
+                                            case 2: // LD (nn), HL
+                                            {
+                                                uint16_t addr = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                                reg.PC += 2;
+
+                                                memory[addr] = reg.general.L;
+                                                memory[addr + 1] = reg.general.H;
+
+                                                log_stream << "LD (" << addr << "), HL" << std::endl;
+                                                break;
+                                            }
+                                            case 3: // LD (nn), A
+                                            {
+                                                uint16_t addr = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                                reg.PC += 2;
+
+                                                memory[addr] = reg.general.A;
+
+                                                log_stream << "LD (" << addr << "), A" << std::endl;
+                                                break;
+                                            }
+                                            default:
+                                                abort();
+                                        }
+                                        break;
+                                    }
+                                    case 1: // q = 1
+                                    {
+                                        switch(p)
+                                        {
+                                            case 0: // LD A, (BC)
+                                            {
+                                                reg.general.A = memory[reg.general.BC];
+                                                log_stream << "LD A, (BC)" << std::endl;
+                                                break;
+                                            }
+                                            case 1: // LD A, (DE)
+                                            {
+                                                reg.general.A = memory[reg.general.DE];
+                                                log_stream << "LD A, (DE)" << std::endl;
+                                                break;
+                                            }
+                                            case 2: // LD HL, (nn)
+                                            {
+                                                uint16_t addr = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                                reg.PC += 2;
+
+                                                reg.general.L = memory[addr];
+                                                reg.general.H = memory[addr + 1];
+
+                                                log_stream << "LD HL, (" << addr << ")" << std::endl;
+                                                break;
+                                            }
+                                            case 3: // LD A, (nn)
+                                            {
+                                                uint16_t addr = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                                reg.PC += 2;
+
+                                                reg.general.A = memory[addr];
+
+                                                log_stream << "LD A, (" << addr << ")" << std::endl;
+                                                break;
+                                            }
+                                            default:
+                                                abort();
+                                        }
+                                        break;
+                                    }
+                                    default:
+                                        abort();
+                                }
+
                                 break;
-                            case 3: // Z = 3
+                            }
+                            case 3: // z = 3
                             {
                                 switch(q)
                                 {
                                     case 0: // INC rp[p]
                                     {
-                                        ++(*reg_table_rp[p]);
+                                        ++(*get_rp_reg(p));
 
 
                                         log_stream << "INC " << reg_table_rp_names[p] << std::endl;
@@ -156,7 +259,7 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                     }
                                     case 1: // DEC rp[p]
                                     {
-                                        --(*reg_table_rp[p]);
+                                        --(*get_rp_reg(p));
                                         log_stream << "DEC " << reg_table_rp_names[p] << std::endl;
                                         break;
                                     }
@@ -167,13 +270,15 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                             }
                             case 4: // INC r[y]
                             {
-                                reg.general.F.PV = *reg_table_r[y] == 0x7F; // If overflow
-                                reg.general.F.H = (((*reg_table_r[y] & 0xF) + 1) & 0x10) == 0x10; // If half carry
+                                uint8_t *y_reg = get_r_reg(y);
 
-                                ++(*reg_table_r[y]); // Do the increment
+                                reg.general.F.PV = *y_reg == 0x7F; // If overflow
+                                reg.general.F.H = (((*y_reg & 0xF) + 1) & 0x10) == 0x10; // If half carry
 
-                                reg.general.F.S = *reg_table_r[y] >> 7; // If result is negative, set S
-                                reg.general.F.Z = *reg_table_r[y] == 0; // If result is 0
+                                ++(*y_reg); // Do the increment
+
+                                reg.general.F.S = *y_reg >> 7; // If result is negative, set S
+                                reg.general.F.Z = *y_reg == 0; // If result is 0
                                 reg.general.F.N = 0;
 
                                 log_stream << "INC " << reg_table_r_names[y] << std::endl;
@@ -181,13 +286,15 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                             }
                             case 5: // DEC r[y]
                             {
-                                reg.general.F.PV = *reg_table_r[y] == 0x80; // If underflow
-                                reg.general.F.H = ((int8_t)(((*reg_table_r[y] & 0xF) - 1)) < 0);
+                                uint8_t *y_reg = get_r_reg(y);
 
-                                --(*reg_table_r[y]); // Do the decrement
+                                reg.general.F.PV = *y_reg == 0x80; // If underflow
+                                reg.general.F.H = ((int8_t)(((*y_reg & 0xF) - 1)) < 0);
 
-                                reg.general.F.S = *reg_table_r[y] >> 7; // If result is negative, set S
-                                reg.general.F.Z = *reg_table_r[y] == 0; // If result is 0
+                                --(*y_reg); // Do the decrement
+
+                                reg.general.F.S = *y_reg >> 7; // If result is negative, set S
+                                reg.general.F.Z = *y_reg == 0; // If result is 0
                                 reg.general.F.N = 1;
 
                                 log_stream << "DEC " << reg_table_r_names[y] << std::endl;
@@ -195,9 +302,10 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                             }
                             case 6: // LD r[y], n
                             {
-                                *reg_table_r[y] = memory[++reg.PC];
+                                uint8_t *y_reg = get_r_reg(y);
+                                *y_reg = memory[++reg.PC];
 
-                                log_stream << "LD " << reg_table_r_names[y].c_str() << ", " << (uint16_t)*reg_table_r[y] << std::endl;
+                                log_stream << "LD " << reg_table_r_names[y].c_str() << ", " << (uint16_t)*y_reg << std::endl;
                                 break;
                             }
                             case 7:
@@ -205,22 +313,39 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                             default:
                                 abort();
                         }
+                        break;
                     }
                     case 1: // X = 1
+                    {
+                        if(z == 6 && y == 6) // HALT
+                        {
+                            // todo: implement, currently just exits
+                            reg.PC = data.size();
+                            log_stream << "HALT" << std::endl;
+                            break;
+                        }
+                        else // LD r[y], r[z]
+                        {
+
+                            *get_r_reg(y) = *get_r_reg(z);
+                            log_stream << "LD " << reg_table_r_names[y] << ", " << reg_table_r_names[z] << std::endl;
+                        }
                         break;
+                    }
                     case 2: // X = 2, alu[y] r[z]
                     {
                         switch(y)
                         {
                             case 0: // ADD A, r[z]
                             {
-                                uint8_t result = reg.general.A + *reg_table_r[z];
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A + *z_reg;
 
                                 reg.general.F.S = result >> 7; // If result is negative, set S
                                 reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*reg_table_r[z] >> 7) && (*reg_table_r[z] >> 7) != reg.general.F.S); // If overflow
-                                reg.general.F.H = (((reg.general.A & 0xF) + *reg_table_r[z]) & 0x10) == 0x10; // If carry from bit 3
-                                reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)*reg_table_r[z])) > 0xFF; // If carry from bit 7
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.H = (((reg.general.A & 0xF) + *z_reg) & 0x10) == 0x10; // If carry from bit 3
+                                reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)*z_reg)) > 0xFF; // If carry from bit 7
                                 reg.general.F.N = 0;
 
                                 reg.general.A = result;
@@ -228,28 +353,57 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                 break;
                             }
                             case 1: // ADC A, r[z]
-                                break;
-                            case 2: // SUB r[z]
-
                             {
-                                uint8_t result = reg.general.A - *reg_table_r[z];
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A + *z_reg + reg.general.F.C;
+
+                                reg.general.F.S = result >> 7; // If result is negative, set S
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.H = (((reg.general.A & 0xF) + *z_reg) & 0x10) == 0x10; // If carry from bit 3
+                                reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)*z_reg) + (uint16_t)reg.general.F.C) > 0xFF; // If carry from bit 7
+                                reg.general.F.N = 0;
+
+                                reg.general.A = result;
+                                log_stream << "ADC A, " << reg_table_r_names[z] << std::endl;
+                                break;
+                            }
+                            case 2: // SUB r[z]
+                            {
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A - *z_reg;
 
                                 reg.general.F.S = result >> 7; // If result is negative
                                 reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = ((reg.general.A & 0xF) < (*reg_table_r[z] & 0xF)); // If borrow from bit 4
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*reg_table_r[z] >> 7) && (*reg_table_r[z] >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.H = ((reg.general.A & 0xF) < (*z_reg & 0xF)); // If borrow from bit 4
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
                                 reg.general.F.N = 1;
-                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*reg_table_r[z]) > 0xFF; // If borrow
+                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*z_reg) > 0xFF; // If borrow
 
                                 reg.general.A = result;
                                 log_stream << "SUB " << reg_table_r_names[z] << std::endl;
                                 break;
                             }
                             case 3: // SBC A, r[z]
+                            {
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A - *z_reg - reg.general.C;
+
+                                reg.general.F.S = result >> 7; // If result is negative
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.H = (reg.general.A & 0xF) < (*z_reg & 0xF) + reg.general.C; // If borrow from bit 4
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.N = 1;
+                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*z_reg) + reg.general.C > 0xFF; // If borrow
+
+                                reg.general.A = result;
+                                log_stream << "SBC A, " << reg_table_r_names[z] << std::endl;
                                 break;
+                            }
                             case 4: // AND r[z]
                             {
-                                uint8_t result = reg.general.A & *reg_table_r[z];
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A & *z_reg;
 
                                 reg.general.F.S = result >> 7; // If result is negative, set S
                                 reg.general.F.Z = result == 0; // If result is 0
@@ -264,7 +418,8 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                             }
                             case 5: // XOR r[z]
                             {
-                                uint8_t result = reg.general.A ^ *reg_table_r[z];
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A ^ *z_reg;
 
                                 reg.general.F.S = result >> 7; // If result is negative, set S
                                 reg.general.F.Z = result == 0; // If result is 0
@@ -279,7 +434,8 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                             }
                             case 6: // OR r[z]
                             {
-                                uint8_t result = reg.general.A | *reg_table_r[z];
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A | *z_reg;
 
                                 reg.general.F.S = result >> 7; // If result is negative, set S
                                 reg.general.F.Z = result == 0; // If result is 0
@@ -293,7 +449,20 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                 break;
                             }
                             case 7: // CP r[z]
+                            {
+                                uint8_t *z_reg = get_r_reg(z);
+                                uint8_t result = reg.general.A - *z_reg;
+
+                                reg.general.F.S = result >> 7; // If result is negative
+                                reg.general.F.Z = result == 0; // If result is 0
+                                reg.general.F.H = ((reg.general.A & 0xF) < (*z_reg & 0xF)); // If borrow from bit 4
+                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
+                                reg.general.F.N = 1;
+                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*z_reg) > 0xFF; // If borrow
+
+                                log_stream << "CP " << reg_table_r_names[z] << std::endl;
                                 break;
+                            }
                             default:
                                 abort();
                         }
@@ -302,15 +471,23 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                     case 3: // X = 3
                         switch(z)
                         {
-                            case 0:
+                            case 0: // Z = 0, RET cc[y]
+                            {
+                                log_stream << "RET " << cc_table_names[y] << std::endl;
+                                if(get_cc_value(y))
+                                {
+                                    reg.PC = pop();
+                                    goto process_instruction;
+                                }
                                 break;
+                            }
                             case 1: // Z = 1
                             {
                                 switch(q)
                                 {
                                     case 0: // POP rp2[p]
                                     {
-                                        *reg_table_rp2[p] = pop();
+                                        *get_rp2_reg(p) = pop();
                                         log_stream << "POP " << reg_table_rp2_names[p] << std::endl;
                                         break;
                                     }
@@ -318,8 +495,14 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                     {
                                         switch(p)
                                         {
-                                            case 0:
+                                            case 0: // RET
+                                            {
+                                                reg.PC = pop();
+
+                                                log_stream << "RET" <<std::endl;
+                                                goto process_instruction;
                                                 break;
+                                            }
                                             case 1: // EXX
                                             {
                                                 std::swap(reg.general.BC, reg.shadow.BC);
@@ -378,20 +561,40 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                 }
                                 break;
                             }
-                            case 4:
+                            case 4: // Z = 4
+                            {
                                 break;
-                            case 5:
+                            }
+                            case 5: // Z = 5
                                 switch(q)
                                 {
                                     case 0: // PUSH rp2[p]
                                     {
-                                        push(*reg_table_rp2[p]);
+                                        push(*get_rp2_reg(p));
 
                                         log_stream << "PUSH " << reg_table_rp2_names[p] << std::endl;
                                         break;
                                     }
                                     case 1:
+                                    {
+                                        switch(p)
+                                        {
+                                            case 0: // CALL nn
+                                            {
+                                                uint16_t call_dest = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                                push(reg.PC + 3);
+
+                                                reg.PC = call_dest;
+
+                                                log_stream << "CALL " << call_dest << std::endl;
+                                                goto process_instruction;
+                                                break;
+                                            }
+                                            default:
+                                                abort();
+                                        }
                                         break;
+                                    }
                                     default:
                                         abort();
                                 }

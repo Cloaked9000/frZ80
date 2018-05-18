@@ -61,6 +61,81 @@ public:
 private:
 
     /*!
+     * Gets the 8bit memory address associated with a given register.
+     * This should be used rather than accessing the 8bit registers directly
+     * through the tables, as (HL) is a special case which this takes care of.
+     *
+     * @param reg_no The register number to get in the r table
+     * @return A pointer to the register
+     */
+    inline uint8_t *get_r_reg(uint8_t reg_no)
+    {
+        if(reg_no == 6)
+        {
+            return &memory[reg.general.HL];
+        }
+
+        return reg_table_r[reg_no];
+    }
+
+    /*!
+     * Gets the 16bit memory address associated with a given register.
+     * This should be used rather than accessing the 16bit registers directly
+     * through the tables.
+     *
+     * @param reg_no The register number to get in the rp table
+     * @return A pointer to the register
+     */
+    inline uint16_t *get_rp_reg(uint8_t reg_no)
+    {
+        return reg_table_rp[reg_no];
+    }
+
+    /*!
+     * Gets the 16bit memory address associated with a given register.
+     * This should be used rather than accessing the 16bit registers directly
+     * through the tables.
+     *
+     * @param reg_no The register number to get in the rp2 table
+     * @return A pointer to the register
+     */
+    inline uint16_t *get_rp2_reg(uint8_t reg_no)
+    {
+        return reg_table_rp2[reg_no];
+    }
+
+    /*!
+     * Gets the value of a given condition flag value
+     *
+     * @param cc_no The condition value to get
+     * @return The value belonging to that condition
+     */
+    inline bool get_cc_value(uint8_t cc_no)
+    {
+        switch(cc_no)
+        {
+            case 0:
+                return !reg.general.F.Z;
+            case 1:
+                return reg.general.F.Z;
+            case 2:
+                return !reg.general.F.C;
+            case 3:
+                return reg.general.F.C;
+            case 4:
+                return !reg.general.F.PV;
+            case 5:
+                return reg.general.F.PV;
+            case 6:
+                return !reg.general.F.S;
+            case 7:
+                return reg.general.F.S;
+            default:
+                abort();
+        }
+    }
+
+    /*!
      * Checks the parity of two numbers
      *
      * @tparam T The type of thing to calculate the parity of
@@ -200,6 +275,7 @@ private:
     std::array<std::string, 8> reg_table_r_names;
     std::array<std::string, 4> reg_table_rp_names;
     std::array<std::string, 4> reg_table_rp2_names;
+    std::array<std::string, 8> cc_table_names;
 };
 
 
