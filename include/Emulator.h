@@ -271,11 +271,29 @@ private:
     std::array<uint8_t*, 8> reg_table_r;
     std::array<uint16_t*, 4> reg_table_rp;
     std::array<uint16_t*, 4> reg_table_rp2;
+    std::array<std::function<void(uint8_t)>, 8> alu_table;
 
     std::array<std::string, 8> reg_table_r_names;
     std::array<std::string, 4> reg_table_rp_names;
     std::array<std::string, 4> reg_table_rp2_names;
     std::array<std::string, 8> cc_table_names;
+    std::array<std::string, 8> alu_table_names;
+
+    void alu_add(uint8_t val);
+
+    void alu_adc(uint8_t val);
+
+    void alu_sub(uint8_t val);
+
+    void alu_sbc(uint8_t val);
+
+    void alu_and(uint8_t val);
+
+    void alu_xor(uint8_t val);
+
+    void alu_or(uint8_t val);
+
+    void alu_cp(uint8_t val);
 };
 
 

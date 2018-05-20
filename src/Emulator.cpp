@@ -39,6 +39,116 @@ Emulator::Prefix Emulator::to_prefix(uint8_t val)
 }
 
 
+void Emulator::alu_add(uint8_t val)
+{
+    uint8_t result = reg.general.A + val;
+
+    reg.general.F.S = result >> 7; // If result is negative, set S
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.PV = ((reg.general.A >> 7) == (val >> 7) && (val >> 7) != reg.general.F.S); // If overflow
+    reg.general.F.H = (((reg.general.A & 0xF) + val) & 0x10) == 0x10; // If carry from bit 3
+    reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)val)) > 0xFF; // If carry from bit 7
+    reg.general.F.N = 0;
+
+    reg.general.A = result;
+}
+
+void Emulator::alu_adc(uint8_t val)
+{
+    uint8_t result = reg.general.A + val + reg.general.F.C;
+
+    reg.general.F.S = result >> 7; // If result is negative, set S
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.PV = ((reg.general.A >> 7) == (val >> 7) && (val >> 7) != reg.general.F.S); // If overflow
+    reg.general.F.H = (((reg.general.A & 0xF) + val) & 0x10) == 0x10; // If carry from bit 3
+    reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)val) + (uint16_t)reg.general.F.C) > 0xFF; // If carry from bit 7
+    reg.general.F.N = 0;
+
+    reg.general.A = result;
+}
+
+void Emulator::alu_sub(uint8_t val)
+{
+    uint8_t result = reg.general.A - val;
+
+    reg.general.F.S = result >> 7; // If result is negative
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.H = ((reg.general.A & 0xF) < (val & 0xF)); // If borrow from bit 4
+    reg.general.F.PV = ((reg.general.A >> 7) == (val >> 7) && (val >> 7) != reg.general.F.S); // If overflow
+    reg.general.F.N = 1;
+    reg.general.F.C = std::abs(reg.general.A) + std::abs(val) > 0xFF; // If borrow
+
+    reg.general.A = result;
+}
+
+void Emulator::alu_sbc(uint8_t val)
+{
+    uint8_t result = reg.general.A - val - reg.general.C;
+
+    reg.general.F.S = result >> 7; // If result is negative
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.H = (reg.general.A & 0xF) < (val & 0xF) + reg.general.C; // If borrow from bit 4
+    reg.general.F.PV = ((reg.general.A >> 7) == (val >> 7) && (val >> 7) != reg.general.F.S); // If overflow
+    reg.general.F.N = 1;
+    reg.general.F.C = std::abs(reg.general.A) + std::abs(val) + reg.general.C > 0xFF; // If borrow
+
+    reg.general.A = result;
+}
+void Emulator::alu_and(uint8_t val)
+{
+    uint8_t result = reg.general.A & val;
+
+    reg.general.F.S = result >> 7; // If result is negative, set S
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.H = 1;
+    reg.general.F.PV = parity(result); // If parity
+    reg.general.F.N = 0;
+    reg.general.F.C = 0;
+
+    reg.general.A = result;
+}
+
+void Emulator::alu_xor(uint8_t val)
+{
+    uint8_t result = reg.general.A ^ val;
+
+    reg.general.F.S = result >> 7; // If result is negative, set S
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.H = 0;
+    reg.general.F.PV = parity(result); // If parity
+    reg.general.F.N = 0;
+    reg.general.F.C = 0;
+
+    reg.general.A = result;
+}
+
+void Emulator::alu_or(uint8_t val)
+{
+    uint8_t result = reg.general.A | val;
+
+    reg.general.F.S = result >> 7; // If result is negative, set S
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.H = 0;
+    reg.general.F.PV = parity(result); // If parity
+    reg.general.F.N = 0;
+    reg.general.F.C = 0;
+
+    reg.general.A = result;
+}
+
+void Emulator::alu_cp(uint8_t val)
+{
+    uint8_t result = reg.general.A - val;
+
+    reg.general.F.S = result >> 7; // If result is negative
+    reg.general.F.Z = result == 0; // If result is 0
+    reg.general.F.H = ((reg.general.A & 0xF) < (val & 0xF)); // If borrow from bit 4
+    reg.general.F.PV = ((reg.general.A >> 7) == (val >> 7) && (val >> 7) != reg.general.F.S); // If overflow
+    reg.general.F.N = 1;
+    reg.general.F.C = std::abs(reg.general.A) + std::abs(val) > 0xFF; // If borrow
+}
+
+
 void Emulator::reset()
 {
     //Reset registers, and set stack pointer to top (it grows downwards)
@@ -49,11 +159,21 @@ void Emulator::reset()
     reg_table_r = {&reg.general.B, &reg.general.C, &reg.general.D, &reg.general.E, &reg.general.H, &reg.general.L, (uint8_t*)&reg.general.HL, &reg.general.A};
     reg_table_rp = {&reg.general.BC, &reg.general.DE, &reg.general.HL, &reg.SP};
     reg_table_rp2 = {&reg.general.BC, &reg.general.DE, &reg.general.HL, &reg.general.AF};
+    alu_table = {std::bind(&Emulator::alu_add, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_adc, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_sub, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_sbc, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_and, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_xor, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_or, this, std::placeholders::_1),
+                 std::bind(&Emulator::alu_cp, this, std::placeholders::_1)};
+
 
     reg_table_r_names = {"B", "C", "D", "E", "H", "L", "(HL)", "A"};
     reg_table_rp_names = {"BC", "DE", "HL", "SP"};
     reg_table_rp2_names = {"BC", "DE", "HL", "AF"};
     cc_table_names = {"NZ", "Z", "NC", "C", "PO", "PE", "P", "M"};
+    alu_table_names = {"ADD A,", "ADC A,", "SUB", "SBC A,", "AND", "XOR", "OR", "CP"};
 }
 
 void Emulator::push(uint16_t val)
@@ -334,138 +454,8 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                     }
                     case 2: // X = 2, alu[y] r[z]
                     {
-                        switch(y)
-                        {
-                            case 0: // ADD A, r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A + *z_reg;
-
-                                reg.general.F.S = result >> 7; // If result is negative, set S
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
-                                reg.general.F.H = (((reg.general.A & 0xF) + *z_reg) & 0x10) == 0x10; // If carry from bit 3
-                                reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)*z_reg)) > 0xFF; // If carry from bit 7
-                                reg.general.F.N = 0;
-
-                                reg.general.A = result;
-                                log_stream << "ADD A, " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 1: // ADC A, r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A + *z_reg + reg.general.F.C;
-
-                                reg.general.F.S = result >> 7; // If result is negative, set S
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
-                                reg.general.F.H = (((reg.general.A & 0xF) + *z_reg) & 0x10) == 0x10; // If carry from bit 3
-                                reg.general.F.C = (((uint16_t)reg.general.A) + ((uint16_t)*z_reg) + (uint16_t)reg.general.F.C) > 0xFF; // If carry from bit 7
-                                reg.general.F.N = 0;
-
-                                reg.general.A = result;
-                                log_stream << "ADC A, " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 2: // SUB r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A - *z_reg;
-
-                                reg.general.F.S = result >> 7; // If result is negative
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = ((reg.general.A & 0xF) < (*z_reg & 0xF)); // If borrow from bit 4
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
-                                reg.general.F.N = 1;
-                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*z_reg) > 0xFF; // If borrow
-
-                                reg.general.A = result;
-                                log_stream << "SUB " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 3: // SBC A, r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A - *z_reg - reg.general.C;
-
-                                reg.general.F.S = result >> 7; // If result is negative
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = (reg.general.A & 0xF) < (*z_reg & 0xF) + reg.general.C; // If borrow from bit 4
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
-                                reg.general.F.N = 1;
-                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*z_reg) + reg.general.C > 0xFF; // If borrow
-
-                                reg.general.A = result;
-                                log_stream << "SBC A, " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 4: // AND r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A & *z_reg;
-
-                                reg.general.F.S = result >> 7; // If result is negative, set S
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = 1;
-                                reg.general.F.PV = parity(result); // If parity
-                                reg.general.F.N = 0;
-                                reg.general.F.C = 0;
-
-                                reg.general.A = result;
-                                log_stream << "AND " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 5: // XOR r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A ^ *z_reg;
-
-                                reg.general.F.S = result >> 7; // If result is negative, set S
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = 0;
-                                reg.general.F.PV = parity(result); // If parity
-                                reg.general.F.N = 0;
-                                reg.general.F.C = 0;
-
-                                reg.general.A = result;
-                                log_stream << "XOR " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 6: // OR r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A | *z_reg;
-
-                                reg.general.F.S = result >> 7; // If result is negative, set S
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = 0;
-                                reg.general.F.PV = parity(result); // If parity
-                                reg.general.F.N = 0;
-                                reg.general.F.C = 0;
-
-                                reg.general.A = result;
-                                log_stream << "OR " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            case 7: // CP r[z]
-                            {
-                                uint8_t *z_reg = get_r_reg(z);
-                                uint8_t result = reg.general.A - *z_reg;
-
-                                reg.general.F.S = result >> 7; // If result is negative
-                                reg.general.F.Z = result == 0; // If result is 0
-                                reg.general.F.H = ((reg.general.A & 0xF) < (*z_reg & 0xF)); // If borrow from bit 4
-                                reg.general.F.PV = ((reg.general.A >> 7) == (*z_reg >> 7) && (*z_reg >> 7) != reg.general.F.S); // If overflow
-                                reg.general.F.N = 1;
-                                reg.general.F.C = std::abs(reg.general.A) + std::abs(*z_reg) > 0xFF; // If borrow
-
-                                log_stream << "CP " << reg_table_r_names[z] << std::endl;
-                                break;
-                            }
-                            default:
-                                abort();
-                        }
+                        alu_table[y](*reg_table_r[z]);
+                        log_stream << alu_table_names[y] << " " << reg_table_r_names[z] << std::endl;
                         break;
                     }
                     case 3: // X = 3
@@ -599,8 +589,12 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                         abort();
                                 }
                                 break;
-                            case 6:
+                            case 6: // 	alu[y] n
+                            {
+                                alu_table[y](memory[++reg.PC]);
+                                log_stream << alu_table_names[y] << " " << (uint16_t)memory[reg.PC] << std::endl;
                                 break;
+                            }
                             case 7:
                                 break;
                             default:

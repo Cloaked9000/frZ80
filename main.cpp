@@ -7,12 +7,12 @@ void io_handler(Emulator::PortState state, uint8_t *data, uint16_t size)
 {
     if(state == Emulator::PortState::Write)
     {
-       // std::cout << (uint16_t)*data << std::endl;
+        // std::cout << (uint16_t)*data << std::endl;
         std::cout.write((char*)data, size);
     }
     else
     {
-       // std::cin.read((char*)data, size);
+        // std::cin.read((char*)data, size);
         std::cin >> data;
     }
 }
