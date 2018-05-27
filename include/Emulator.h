@@ -272,28 +272,42 @@ private:
     std::array<uint16_t*, 4> reg_table_rp;
     std::array<uint16_t*, 4> reg_table_rp2;
     std::array<std::function<void(uint8_t)>, 8> alu_table;
+    std::array<std::array<std::function<void()>, 4>, 4> bli_table;
 
     std::array<std::string, 8> reg_table_r_names;
     std::array<std::string, 4> reg_table_rp_names;
     std::array<std::string, 4> reg_table_rp2_names;
     std::array<std::string, 8> cc_table_names;
     std::array<std::string, 8> alu_table_names;
+    std::array<std::array<std::string, 4>, 4> bli_table_names;
 
+    //ALU handlers
     void alu_add(uint8_t val);
-
     void alu_adc(uint8_t val);
-
     void alu_sub(uint8_t val);
-
     void alu_sbc(uint8_t val);
-
     void alu_and(uint8_t val);
-
     void alu_xor(uint8_t val);
-
     void alu_or(uint8_t val);
-
     void alu_cp(uint8_t val);
+
+    //BLI handlers
+    void bli_ldi();
+    void bli_cpi();
+    void bli_ini();
+    void bli_outi();
+    void bli_ldd();
+    void bli_cpd();
+    void bli_ind();
+    void bli_outd();
+    void bli_ldir();
+    void bli_cpir();
+    void bli_inir();
+    void bli_otir();
+    void bli_lddr();
+    void bli_cpdr();
+    void bli_indr();
+    void bli_otdr();
 };
 
 

@@ -8,6 +8,8 @@
 #include <vector>
 #include <bitset>
 #include <cstring>
+#include <Emulator.h>
+
 #include "Emulator.h"
 
 Emulator::Emulator()
@@ -148,6 +150,86 @@ void Emulator::alu_cp(uint8_t val)
     reg.general.F.C = std::abs(reg.general.A) + std::abs(val) > 0xFF; // If borrow
 }
 
+void Emulator::bli_ldi()
+{
+
+}
+
+void Emulator::bli_cpi()
+{
+
+}
+
+void Emulator::bli_ini()
+{
+
+}
+
+void Emulator::bli_outi()
+{
+
+}
+
+void Emulator::bli_ldd()
+{
+
+}
+
+void Emulator::bli_cpd()
+{
+
+}
+
+void Emulator::bli_ind()
+{
+
+}
+
+void Emulator::bli_outd()
+{
+
+}
+
+void Emulator::bli_ldir()
+{
+
+}
+
+void Emulator::bli_cpir()
+{
+
+}
+
+void Emulator::bli_inir()
+{
+
+}
+
+void Emulator::bli_otir()
+{
+
+}
+
+void Emulator::bli_lddr()
+{
+
+}
+
+void Emulator::bli_cpdr()
+{
+
+}
+
+void Emulator::bli_indr()
+{
+
+}
+
+void Emulator::bli_otdr()
+{
+
+}
+
 
 void Emulator::reset()
 {
@@ -168,12 +250,22 @@ void Emulator::reset()
                  std::bind(&Emulator::alu_or, this, std::placeholders::_1),
                  std::bind(&Emulator::alu_cp, this, std::placeholders::_1)};
 
+    bli_table =  std::array<std::array<std::function<void()>, 4>, 4>
+                 {{{std::bind(&Emulator::bli_ldi, this), std::bind(&Emulator::bli_cpi, this), std::bind(&Emulator::bli_ini, this), std::bind(&Emulator::bli_outi, this)},
+                 {std::bind(&Emulator::bli_ldd, this), std::bind(&Emulator::bli_cpd, this), std::bind(&Emulator::bli_ind, this), std::bind(&Emulator::bli_outd, this)},
+                 {std::bind(&Emulator::bli_ldir, this), std::bind(&Emulator::bli_cpir, this), std::bind(&Emulator::bli_inir, this), std::bind(&Emulator::bli_otir, this)},
+                 {std::bind(&Emulator::bli_lddr, this), std::bind(&Emulator::bli_cpdr, this), std::bind(&Emulator::bli_indr, this), std::bind(&Emulator::bli_otdr, this)}}};
+
 
     reg_table_r_names = {"B", "C", "D", "E", "H", "L", "(HL)", "A"};
     reg_table_rp_names = {"BC", "DE", "HL", "SP"};
     reg_table_rp2_names = {"BC", "DE", "HL", "AF"};
     cc_table_names = {"NZ", "Z", "NC", "C", "PO", "PE", "P", "M"};
     alu_table_names = {"ADD A,", "ADC A,", "SUB", "SBC A,", "AND", "XOR", "OR", "CP"};
+    bli_table_names = {{{"LDI", "CPI", "INI", "OUTI"},
+                        {"LDD", "CPD", "IND", "OUTD"},
+                        {"LDIR", "CPIR", "INIR", "OTIR"},
+                        {"LDDR", "CPDR", "INDR", "OTDR"}}};
 }
 
 void Emulator::push(uint16_t val)
@@ -603,6 +695,39 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                         break;
                     default:
                         abort();
+                }
+                break;
+            }
+            case Prefix::CB:
+            {
+                break;
+            }
+            case Prefix::ED:
+            {
+                switch(x)
+                {
+                    case 0: // NONI
+                    {
+                        break;
+                    }
+                    case 1:
+                    {
+                        break;
+                    }
+                    case 2: // x = 2
+                    {
+                        if(z <= 3 && y >= 4) // BLI[y, z]
+                        {
+                            bli_table[y - 4][z]();
+                            log_stream << bli_table_names[y - 4][z] << std::endl;
+                            break;
+                        }
+                        break; // NONI
+                    }
+                    case 3: // NONI
+                    {
+                        break;
+                    }
                 }
                 break;
             }
