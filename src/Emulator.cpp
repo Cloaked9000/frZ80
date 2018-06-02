@@ -190,9 +190,15 @@ void Emulator::bli_outd()
 
 }
 
-void Emulator::bli_ldir()
+void Emulator::bli_ldir() //note: This wont behave realistically if the instruction overwrites itself
 {
-
+    do
+    {
+        memory[reg.general.DE++] = memory[reg.general.HL++];
+    } while(--reg.general.BC != 0);
+    reg.general.F.H = 0;
+    reg.general.F.N = 0;
+    reg.general.F.PV = reg.general.BC - 1 != 0;
 }
 
 void Emulator::bli_cpir()
@@ -396,7 +402,7 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                             }
                                             case 3: // LD (nn), A
                                             {
-                                                uint16_t addr = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
+                                                uint16_t addr = memory[reg.PC + 1] | (memory[reg.PC + 2] << 8);
                                                 reg.PC += 2;
 
                                                 memory[addr] = reg.general.A;
@@ -409,7 +415,7 @@ void Emulator::emulate(const std::vector<uint8_t> &data, std::ostream &log_strea
                                         }
                                         break;
                                     }
-                                    case 1: // q = 1
+                                    case 1: // Q = 1
                                     {
                                         switch(p)
                                         {
